@@ -7,8 +7,6 @@ import ru.titovtima.familymapserver.plugins.configureRouting
 import ru.titovtima.familymapserver.plugins.configureSerialization
 
 fun main() {
-    UsersList.readFromFile()
-
     embeddedServer(Netty, port = 3002, host = "localhost", module = Application::module)
         .start(wait = true)
 }
@@ -16,4 +14,10 @@ fun main() {
 fun Application.module() {
     configureRouting()
     configureSerialization()
+}
+
+class ServerData {
+    companion object {
+        val usersList = UsersList.readFromFile()
+    }
 }

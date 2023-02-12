@@ -70,7 +70,6 @@ class UsersList {
     }
 
     companion object {
-        var instance = UsersList()
         const val fileToSave = "datafiles/usersList.txt"
 
         fun readFromFile(filename: String = fileToSave): UsersList {
@@ -85,7 +84,6 @@ class UsersList {
                 usersList.addUser(user)
                 ind += 4
             }
-            instance = usersList
             return usersList
         }
     }
