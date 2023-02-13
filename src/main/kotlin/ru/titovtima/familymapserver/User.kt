@@ -4,9 +4,6 @@ import kotlinx.serialization.Serializable
 import java.sql.Connection
 
 @Serializable
-data class UserLogInData(val login: String, val password: String)
-
-@Serializable
 data class UserNoIdData(val login: String, val password: String, val name: String) {
     fun writeToDatabase(connection: Connection = ServerData.databaseConnection): Int {
         val writeQuery = connection.prepareStatement(
@@ -58,16 +55,16 @@ class UsersList {
         else null
 
     fun addUser(userNoIdData: UserNoIdData) =
-        if (loginToIdMap.containsKey(userNoIdData.login)) false
+        if (loginToIdMap.containsKey(userNoIdData.login)) null
         else {
             val user = User(userNoIdData.writeToDatabase(connection), userNoIdData)
             loginToIdMap[user.login] = user.id
             map[user.id] = user
-            true
+            user
         }
 
-    fun checkUserPassword(userLogInData: UserLogInData) =
-        getUser(userLogInData.login)?.checkPassword(userLogInData.password) == true
+    fun checkUserPassword(login: String, password: String) =
+        getUser(login)?.checkPassword(password) == true
 
     fun hasLogin(login: String) = loginToIdMap.containsKey(login)
 

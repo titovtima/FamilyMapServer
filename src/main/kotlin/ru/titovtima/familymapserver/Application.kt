@@ -3,6 +3,7 @@ package ru.titovtima.familymapserver
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import ru.titovtima.familymapserver.plugins.configureAuthentication
 import ru.titovtima.familymapserver.plugins.configureRouting
 import ru.titovtima.familymapserver.plugins.configureSerialization
 import java.sql.DriverManager
@@ -21,8 +22,9 @@ fun main() {
 }
 
 fun Application.module() {
-    configureRouting()
+    configureAuthentication()
     configureSerialization()
+    configureRouting()
 }
 
 class ServerData {
