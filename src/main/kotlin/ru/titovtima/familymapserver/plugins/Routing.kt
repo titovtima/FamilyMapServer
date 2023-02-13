@@ -25,5 +25,12 @@ fun Application.configureRouting() {
             } else
                 call.respond(HttpStatusCode.Forbidden, "Registration error")
         }
+        post("/location") {
+            val userLocation = call.receive<UserLocationData>()
+            if (userLocation.writeToDatabase())
+                call.respond(HttpStatusCode.OK, "Successfully wrote location")
+            else
+                call.respond(HttpStatusCode.BadGateway, "Error posting location")
+        }
     }
 }
