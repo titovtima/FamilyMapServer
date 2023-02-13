@@ -1,14 +1,34 @@
 package ru.titovtima.familymapserver
 
 import kotlinx.serialization.Serializable
-import java.io.FileReader
-import java.io.FileWriter
+import java.sql.Connection
 
 @Serializable
 data class UserLogInData(val login: String, val password: String)
 
 @Serializable
-class User (val login: String, private var password: String, private var name: String) {
+data class UserNoIdData(val login: String, val password: String, val name: String) {
+    fun writeToDatabase(connection: Connection = ServerData.databaseConnection): Int {
+        val writeQuery = connection.prepareStatement(
+            "insert into \"User\" (login, password, name) values (?, ?, ?);")
+        writeQuery.setString(1, login)
+        writeQuery.setString(2, password)
+        writeQuery.setString(3, name)
+        writeQuery.execute()
+
+        val getResultQuery = connection.prepareStatement("select id from \"User\" where login = ?")
+        getResultQuery.setString(1, login)
+        val result = getResultQuery.executeQuery()
+        result.next()
+        return result.getInt("id")
+    }
+}
+
+@Serializable
+class User (val id: Int, val login: String, private var password: String, private var name: String) {
+    constructor(id: Int, userNoIdData: UserNoIdData):
+            this(id, userNoIdData.login, userNoIdData.password, userNoIdData.name)
+
     fun checkPassword(password: String) = password == this.password
 
     fun changePassword(oldPassword: String, newPassword: String) =
@@ -23,67 +43,64 @@ class User (val login: String, private var password: String, private var name: S
     fun setName(name: String) {
         this.name = name
     }
-
-    fun writeToFile(writer: FileWriter) {
-        writer.write(login + "\n" + password + "\n" + name + "\n")
-    }
 }
 
 class UsersList {
-    private val map = mutableMapOf<String, User>()
+    private val map = mutableMapOf<Int, User>()
+    private val loginToIdMap = mutableMapOf<String, Int>()
+    val connection = ServerData.databaseConnection
 
-    fun addUser(user: User) =
-        if (map.containsKey(user.login)) false
+    fun getUser(id: Int) = map[id]
+
+    fun getUser(login: String) =
+        if (loginToIdMap[login] != null)
+            map[loginToIdMap[login]]
+        else null
+
+    fun addUser(userNoIdData: UserNoIdData) =
+        if (loginToIdMap.containsKey(userNoIdData.login)) false
         else {
-            map[user.login] = user
+            val user = User(userNoIdData.writeToDatabase(connection), userNoIdData)
+            loginToIdMap[user.login] = user.id
+            map[user.id] = user
             true
         }
 
     fun checkUserPassword(userLogInData: UserLogInData) =
-        map[userLogInData.login]?.checkPassword(userLogInData.password) == true
+        getUser(userLogInData.login)?.checkPassword(userLogInData.password) == true
 
-    fun getUser(userLogInData: UserLogInData) =
-        if (checkUserPassword(userLogInData))
-            map[userLogInData.login]
-        else
-            null
+    fun hasLogin(login: String) = loginToIdMap.containsKey(login)
 
-    fun hasLogin(login: String) = map.containsKey(login)
-
-    fun getUserName(login: String) = map[login]?.getName()
-
-    fun deleteUser(userLogInData: UserLogInData) =
-        if (getUser(userLogInData) != null) {
-            map.remove(userLogInData.login)
-            true
-        } else {
-            !hasLogin(userLogInData.login)
+    fun deleteUser(id: Int): User? {
+        val user = getUser(id)
+        if (user != null) {
+            val query = connection.prepareStatement("delete from \"User\" where id = ?")
+            query.setInt(1, id)
+            query.execute()
+            map.remove(id)
+            loginToIdMap.remove(user.login)
         }
-
-    fun saveToFile(filename: String = fileToSave) {
-        FileWriter(filename).use { writer ->
-            for (user in map.values) {
-                user.writeToFile(writer)
-                writer.write("\n")
-            }
-        }
+        return user
     }
 
     companion object {
-        const val fileToSave = "datafiles/usersList.txt"
+        fun readFromDatabase(connection: Connection = ServerData.databaseConnection): UsersList {
+            val query = connection.prepareStatement("select * from \"User\"")
 
-        fun readFromFile(filename: String = fileToSave): UsersList {
+            val result = query.executeQuery()
+
             val usersList = UsersList()
-            val strings = mutableListOf<String>()
-            FileReader(filename).use { reader ->
-                strings.addAll(reader.readLines())
+            while(result.next()) {
+                val id = result.getInt("id")
+                val login = result.getString("login")
+                val password = result.getString("password")
+                val name = result.getString("name")
+
+                val user = User(id, login, password, name)
+                usersList.map[id] = user
+                usersList.loginToIdMap[login] = id
             }
-            var ind = 0
-            while (ind < strings.size) {
-                val user = User(strings[ind], strings[ind + 1], strings[ind + 2])
-                usersList.addUser(user)
-                ind += 4
-            }
+
             return usersList
         }
     }

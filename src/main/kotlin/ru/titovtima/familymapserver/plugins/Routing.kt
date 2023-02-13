@@ -5,10 +5,7 @@ import io.ktor.server.routing.*
 import io.ktor.server.response.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
-import ru.titovtima.familymapserver.ServerData
-import ru.titovtima.familymapserver.User
-import ru.titovtima.familymapserver.UserLogInData
-import ru.titovtima.familymapserver.UsersList
+import ru.titovtima.familymapserver.*
 
 fun Application.configureRouting() {
     routing {
@@ -22,9 +19,8 @@ fun Application.configureRouting() {
         }
         post("/auth/registration") {
             val usersList = ServerData.usersList
-            val newUser = call.receive<User>()
+            val newUser = call.receive<UserNoIdData>()
             if (usersList.addUser(newUser)) {
-                usersList.saveToFile()
                 call.respond(HttpStatusCode.Created, "Successfully registered user")
             } else
                 call.respond(HttpStatusCode.Forbidden, "Registration error")

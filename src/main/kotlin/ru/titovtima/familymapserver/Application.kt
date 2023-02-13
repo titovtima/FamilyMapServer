@@ -5,6 +5,7 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import ru.titovtima.familymapserver.plugins.configureRouting
 import ru.titovtima.familymapserver.plugins.configureSerialization
+import java.sql.DriverManager
 
 fun main() {
     embeddedServer(Netty, port = 3002, host = "localhost", module = Application::module)
@@ -18,6 +19,8 @@ fun Application.module() {
 
 class ServerData {
     companion object {
-        val usersList = UsersList.readFromFile()
+        val databaseConnection = DriverManager.getConnection(
+            "jdbc:postgresql://localhost:5432/postgres", "postgres", "postgres")
+        val usersList = UsersList.readFromDatabase()
     }
 }
