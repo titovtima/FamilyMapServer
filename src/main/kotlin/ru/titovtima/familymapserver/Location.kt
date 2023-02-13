@@ -27,3 +27,20 @@ data class UserLocationData(val userId: Int, val location: Location) {
         }
     }
 }
+
+fun deleteOldLocations(maxAge: Long = 1000*60*60*24*7, connection: Connection = ServerData.databaseConnection) {
+    val now = Date().time
+    val readQuery = connection.prepareStatement("select userId, date from UserLocation")
+    val readResult = readQuery.executeQuery()
+
+    while (readResult.next()) {
+        val userId = readResult.getInt("userId")
+        val date = readResult.getLong("date")
+        if (date + maxAge < now) {
+            val deleteQuery = connection.prepareStatement("delete from UserLocation where userid = ? and date = ?")
+            deleteQuery.setInt(1, userId)
+            deleteQuery.setLong(2, date)
+            deleteQuery.execute()
+        }
+    }
+}

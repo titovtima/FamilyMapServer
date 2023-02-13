@@ -6,8 +6,16 @@ import io.ktor.server.netty.*
 import ru.titovtima.familymapserver.plugins.configureRouting
 import ru.titovtima.familymapserver.plugins.configureSerialization
 import java.sql.DriverManager
+import kotlin.concurrent.thread
 
 fun main() {
+    thread {
+        while (true) {
+            deleteOldLocations()
+            Thread.sleep(1000*60*60)
+        }
+    }
+
     embeddedServer(Netty, port = 3002, host = "localhost", module = Application::module)
         .start(wait = true)
 }
