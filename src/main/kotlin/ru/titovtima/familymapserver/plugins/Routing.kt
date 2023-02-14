@@ -12,7 +12,7 @@ fun Application.configureRouting() {
     routing {
         post("/auth/registration") {
             val usersList = ServerData.usersList
-            val newUserData = call.receive<UserNoIdData>()
+            val newUserData = call.receive<UserRegistrationData>()
             val addedUser = usersList.addUser(newUserData)
             if (addedUser != null) {
                 call.respond(HttpStatusCode.Created, addedUser.id)
@@ -37,6 +37,32 @@ fun Application.configureRouting() {
                         call.respond(HttpStatusCode.OK, "Successfully wrote location")
                     else
                         call.respond(HttpStatusCode.BadGateway, "Error posting location")
+                }
+            }
+            post("shareLocation/share") {
+                val usersList = ServerData.usersList
+                val userIdSharing = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                val userSharing = userIdSharing?.let { usersList.getUser(it) }
+                val userLoginSharedTo = call.receiveText()
+                val userIdSharedTo = usersList.loginToIdMap[userLoginSharedTo]
+                if (userSharing == null || userIdSharedTo == null || userIdSharedTo == userIdSharing) {
+                    call.respond(HttpStatusCode.InternalServerError, "Error sharing location")
+                } else {
+                    userSharing.shareLocation(userIdSharedTo)
+                    call.respond(HttpStatusCode.OK, "Successfully shared location")
+                }
+            }
+            post("shareLocation/stop") {
+                val usersList = ServerData.usersList
+                val userIdSharing = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                val userSharing = userIdSharing?.let { usersList.getUser(it) }
+                val userLoginSharedTo = call.receiveText()
+                val userIdSharedTo = usersList.loginToIdMap[userLoginSharedTo]
+                if (userSharing == null || userIdSharedTo == null || userIdSharedTo == userIdSharing) {
+                    call.respond(HttpStatusCode.InternalServerError, "Error stop sharing location")
+                } else {
+                    userSharing.stopSharingLocation(userIdSharedTo)
+                    call.respond(HttpStatusCode.OK, "Successfully stop sharing location")
                 }
             }
         }
