@@ -10,10 +10,39 @@ import java.sql.DriverManager
 import kotlin.concurrent.thread
 
 fun main() {
+    var deleteOldLocationsFlag = true
     thread {
         while (true) {
+            while (!deleteOldLocationsFlag)
+                Thread.yield()
+            deleteOldLocationsFlag = false
             deleteOldLocations()
-            Thread.sleep(1000*60*60)
+        }
+    }
+    var writeUsersLocationsToDatabaseFlag = false
+    thread {
+        while (true) {
+            while (!writeUsersLocationsToDatabaseFlag)
+                Thread.yield()
+            writeUsersLocationsToDatabaseFlag = false
+            for (user in ServerData.usersList.getList()) {
+                val userLocation = user.getLastLocation() ?: continue
+                try {
+                    writeLocationToDatabase(user.id, userLocation, ServerData.databaseConnection)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+    thread {
+        var counter = 0
+        while (true) {
+            Thread.sleep(1000*60*5)
+            writeUsersLocationsToDatabaseFlag = true
+            if (counter == 20) {
+                counter = 0
+                deleteOldLocationsFlag = true
+            }
+            counter++
         }
     }
 

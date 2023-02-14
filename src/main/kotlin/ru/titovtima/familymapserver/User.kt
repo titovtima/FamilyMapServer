@@ -13,7 +13,7 @@ data class UserRegistrationData(val login: String, val password: String, val nam
         writeQuery.setString(3, name)
         writeQuery.execute()
 
-        val getResultQuery = connection.prepareStatement("select id from \"User\" where login = ?")
+        val getResultQuery = connection.prepareStatement("select id from \"User\" where login = ?;")
         getResultQuery.setString(1, login)
         val result = getResultQuery.executeQuery()
         result.next()
@@ -24,6 +24,25 @@ data class UserRegistrationData(val login: String, val password: String, val nam
 @Serializable
 class User (val id: Int, val login: String, private var password: String, private var name: String) {
     private val shareLocationToUsers = mutableSetOf<Int>()
+    private var lastLocation: Location?
+
+    init {
+        val connection = ServerData.databaseConnection
+        val queryGetLastLocation = connection.prepareStatement(
+            "select latitude, longitude, date from UserLocation where userId = ? and date = (" +
+                    "select max(date) from UserLocation where userId = ? group by userId);")
+        queryGetLastLocation.setInt(1, id)
+        queryGetLastLocation.setInt(2, id)
+        val resultLastLocation = queryGetLastLocation.executeQuery()
+        lastLocation = if (resultLastLocation.next()) {
+            val latitude = resultLastLocation.getInt("latitude")
+            val longitude = resultLastLocation.getInt("longitude")
+            val date = resultLastLocation.getLong("date")
+            Location(latitude, longitude, date)
+        } else {
+            null
+        }
+    }
 
     constructor(id: Int, userRegistrationData: UserRegistrationData):
             this(id, userRegistrationData.login, userRegistrationData.password, userRegistrationData.name)
@@ -48,7 +67,7 @@ class User (val id: Int, val login: String, private var password: String, privat
         if (writeToDb) {
             val connection = ServerData.databaseConnection
             val query = connection.prepareStatement(
-                "insert into UserShareLocation (userSharingId, userSharedToId) values (?, ?) "
+                "insert into UserShareLocation (userSharingId, userSharedToId) values (?, ?);"
             )
             query.setInt(1, id)
             query.setInt(2, userId)
@@ -62,7 +81,7 @@ class User (val id: Int, val login: String, private var password: String, privat
         if (writeToDb) {
             val connection = ServerData.databaseConnection
             val query = connection.prepareStatement(
-                "delete from UserShareLocation where userSharingId = ? and userSharedToId = ?"
+                "delete from UserShareLocation where userSharingId = ? and userSharedToId = ?;"
             )
             query.setInt(1, id)
             query.setInt(2, userId)
@@ -72,12 +91,21 @@ class User (val id: Int, val login: String, private var password: String, privat
     }
 
     fun checkSharingLocation(userId: Int) = shareLocationToUsers.contains(userId)
+
+    fun getLastLocation() = lastLocation
+
+    fun updateLastLocation(location: Location) {
+        val _lastLocation = lastLocation
+        if (_lastLocation == null || _lastLocation.date < location.date) {
+            lastLocation = location
+        }
+    }
 }
 
 class UsersList {
     private val map = mutableMapOf<Int, User>()
     val loginToIdMap = mutableMapOf<String, Int>()
-    val connection = ServerData.databaseConnection
+    val connection: Connection = ServerData.databaseConnection
 
     fun getUser(id: Int) = map[id]
 
@@ -103,7 +131,7 @@ class UsersList {
     fun deleteUser(id: Int): User? {
         val user = getUser(id)
         if (user != null) {
-            val query = connection.prepareStatement("delete from \"User\" where id = ?")
+            val query = connection.prepareStatement("delete from \"User\" where id = ?;")
             query.setInt(1, id)
             query.execute()
             map.remove(id)
@@ -112,9 +140,11 @@ class UsersList {
         return user
     }
 
+    fun getList() = map.values
+
     companion object {
         fun readFromDatabase(connection: Connection = ServerData.databaseConnection): UsersList {
-            val queryReadUsers = connection.prepareStatement("select * from \"User\"")
+            val queryReadUsers = connection.prepareStatement("select * from \"User\";")
             val resultReadUsers = queryReadUsers.executeQuery()
             val usersList = UsersList()
             while(resultReadUsers.next()) {
@@ -128,7 +158,7 @@ class UsersList {
                 usersList.loginToIdMap[login] = id
             }
 
-            val queryReadLocationSharing = connection.prepareStatement("select * from UserShareLocation")
+            val queryReadLocationSharing = connection.prepareStatement("select * from UserShareLocation;")
             val resultReadLocationSharing = queryReadLocationSharing.executeQuery()
             while (resultReadLocationSharing.next()) {
                 val userSharingId = resultReadLocationSharing.getInt("userSharingId")
