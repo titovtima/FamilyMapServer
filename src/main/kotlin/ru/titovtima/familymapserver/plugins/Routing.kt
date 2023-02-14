@@ -6,6 +6,8 @@ import io.ktor.server.response.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import ru.titovtima.familymapserver.*
 import java.util.*
 
@@ -22,46 +24,43 @@ fun Application.configureRouting() {
         }
         authenticate("auth-basic") {
             post("/auth/login") {
-                val userIdString = call.principal<UserIdPrincipal>()?.name
-                if (userIdString != null)
-                    call.respond(HttpStatusCode.OK, userIdString)
-                else
-                    call.respond(HttpStatusCode.Unauthorized, "Log in error")
+                val usersList = ServerData.usersList
+                val user = call.principal<UserIdPrincipal>()?.name
+                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
+                    HttpStatusCode.Unauthorized, "Log in error")
+                call.respond(HttpStatusCode.OK, Json.encodeToString(user))
             }
             post("/location") {
-                val userId = call.principal<UserIdPrincipal>()?.name?.toIntOrNull() ?: return@post call.respond(
+                val usersList = ServerData.usersList
+                val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
                     HttpStatusCode.Unauthorized, "Error reading user")
                 val location = call.receive<Location>()
-                val usersList = ServerData.usersList
-                val user = usersList.getUser(userId)
-                user?.updateLastLocation(location) ?: return@post call.respond(
-                    HttpStatusCode.Unauthorized, "Error reading user")
+                user.updateLastLocation(location)
                 call.respond(HttpStatusCode.OK, "Successfully wrote location")
             }
-            post("/shareLocation/share") {
+            post("/shareLocation/{action}") {
                 val usersList = ServerData.usersList
-                val userIdSharing = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
-                val userSharing = userIdSharing?.let { usersList.getUser(it) }
+                val userSharing = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
+                    HttpStatusCode.Unauthorized, "Error reading user")
                 val userLoginSharedTo = call.receiveText()
-                val userIdSharedTo = usersList.loginToIdMap[userLoginSharedTo]
-                if (userSharing == null || userIdSharedTo == null || userIdSharedTo == userIdSharing) {
-                    call.respond(HttpStatusCode.BadRequest, "Error sharing location")
+                val userIdSharedTo = usersList.getUser(userLoginSharedTo)?.id ?: return@post call.respond(
+                    HttpStatusCode.BadRequest, "No user with login $userLoginSharedTo")
+                if (userIdSharedTo == userSharing.id) {
+                    call.respond(HttpStatusCode.BadRequest, "You always share location to yourself")
                 } else {
-                    userSharing.shareLocation(userIdSharedTo)
-                    call.respond(HttpStatusCode.OK, "Successfully shared location")
-                }
-            }
-            post("/shareLocation/stop") {
-                val usersList = ServerData.usersList
-                val userIdSharing = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
-                val userSharing = userIdSharing?.let { usersList.getUser(it) }
-                val userLoginSharedTo = call.receiveText()
-                val userIdSharedTo = usersList.loginToIdMap[userLoginSharedTo]
-                if (userSharing == null || userIdSharedTo == null || userIdSharedTo == userIdSharing) {
-                    call.respond(HttpStatusCode.BadRequest, "Error stop sharing location")
-                } else {
-                    userSharing.stopSharingLocation(userIdSharedTo)
-                    call.respond(HttpStatusCode.OK, "Successfully stop sharing location")
+                    when (val action = call.parameters["action"]) {
+                        "share" -> {
+                            userSharing.shareLocation(userIdSharedTo)
+                            call.respond(HttpStatusCode.OK, Json.encodeToString(userSharing))
+                        }
+                        "stop" -> {
+                            userSharing.stopSharingLocation(userIdSharedTo)
+                            call.respond(HttpStatusCode.OK, Json.encodeToString(userSharing))
+                        }
+                        else -> return@post call.respond(HttpStatusCode.BadRequest, "No action $action")
+                    }
                 }
             }
             get("/location/{userLogin}") {
