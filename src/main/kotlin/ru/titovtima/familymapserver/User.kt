@@ -100,6 +100,22 @@ class User (val id: Int, val login: String, private var password: String, privat
             lastLocation = location
         }
     }
+
+    fun getLocationHistory(): List<Location> {
+        val resultList = mutableListOf<Location>()
+        val connection = ServerData.databaseConnection;
+        val query = connection.prepareStatement(
+            "select latitude, longitude, date from UserLocation where userId = ? order by date")
+        query.setInt(1, id)
+        val result = query.executeQuery()
+        while (result.next()) {
+            val latitude = result.getInt("latitude")
+            val longitude = result.getInt("longitude")
+            val date = result.getLong("date")
+            resultList.add(Location(latitude, longitude, date))
+        }
+        return resultList.toList()
+    }
 }
 
 class UsersList {

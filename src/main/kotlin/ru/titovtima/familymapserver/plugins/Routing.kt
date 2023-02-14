@@ -63,7 +63,7 @@ fun Application.configureRouting() {
                     }
                 }
             }
-            get("/location/{userLogin}") {
+            get("/location/{option}/{userLogin}") {
                 val userIdAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull() ?: return@get call.respond(
                     HttpStatusCode.Unauthorized, "Error reading authorization data")
                 val userIdAsked = call.parameters["userLogin"] ?: return@get call.respond(
@@ -72,10 +72,26 @@ fun Application.configureRouting() {
                 val userAsked = usersList.getUser(userIdAsked) ?: return@get call.respond(
                     HttpStatusCode.NotFound, "No user with login $userIdAsked")
                 if (userAsked.checkSharingLocation(userIdAsking) || userAsked.id == userIdAsking) {
-                    val location = userAsked.getLastLocation() ?: return@get call.respond(
-                        HttpStatusCode.NotFound, "User's location in unknown")
-                    val locationString = Base64.getEncoder().encodeToString(location.toByteArray())
-                    return@get call.respond(HttpStatusCode.OK, locationString)
+                    when (val option = call.parameters["option"]) {
+                        "last" -> {
+                            val location = userAsked.getLastLocation() ?: return@get call.respond(
+                                HttpStatusCode.NotFound, "User's location in unknown")
+                            val locationString = Base64.getEncoder().encodeToString(location.toByteArray())
+                            return@get call.respond(HttpStatusCode.OK, locationString)
+                        }
+                        "history" -> {
+                            val locationHistory = userAsked.getLocationHistory()
+                            return@get if (locationHistory.isEmpty())
+                                call.respond(HttpStatusCode.NotFound, "User's location history in unknown")
+                            else {
+                                val array = arrayListOf<Byte>()
+                                locationHistory.forEach { location -> array.addAll(location.toByteArray().toList()) }
+                                val locationString = Base64.getEncoder().encodeToString(array.toByteArray())
+                                call.respond(HttpStatusCode.OK, locationString)
+                            }
+                        }
+                        else -> return@get call.respond(HttpStatusCode.BadRequest, "No option $option")
+                    }
                 } else {
                     return@get call.respond(
                         HttpStatusCode.Forbidden, "You have no permission to read user's location")
