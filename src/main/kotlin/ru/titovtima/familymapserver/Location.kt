@@ -8,6 +8,14 @@ import java.util.Date
 @Serializable
 data class Location(val latitude: Int, val longitude: Int, val date: Long) {
     constructor(latitude: Int, longitude: Int, date: Date): this(latitude, longitude, date.time)
+
+    fun toByteArray(): ByteArray {
+        val array = ByteArray(16)
+        for (i in 0..3) array[i] = (latitude shr (i*8)).toByte()
+        for (i in 0..3) array[i + 4] = (longitude shr (i*8)).toByte()
+        for (i in 0..7) array[i + 8] = (date shr (i*8)).toByte()
+        return array
+    }
 }
 
 fun writeLocationToDatabase(userId: Int,

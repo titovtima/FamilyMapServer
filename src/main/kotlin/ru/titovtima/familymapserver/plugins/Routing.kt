@@ -7,6 +7,7 @@ import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import ru.titovtima.familymapserver.*
+import java.util.*
 
 fun Application.configureRouting() {
     routing {
@@ -61,6 +62,24 @@ fun Application.configureRouting() {
                 } else {
                     userSharing.stopSharingLocation(userIdSharedTo)
                     call.respond(HttpStatusCode.OK, "Successfully stop sharing location")
+                }
+            }
+            get("/location/{userLogin}") {
+                val userIdAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull() ?: return@get call.respond(
+                    HttpStatusCode.Unauthorized, "Error reading authorization data")
+                val userIdAsked = call.parameters["userLogin"] ?: return@get call.respond(
+                    HttpStatusCode.BadRequest, "Error reading user login asked for location")
+                val usersList = ServerData.usersList
+                val userAsked = usersList.getUser(userIdAsked) ?: return@get call.respond(
+                    HttpStatusCode.NotFound, "No user with login $userIdAsked")
+                if (userAsked.checkSharingLocation(userIdAsking) || userAsked.id == userIdAsking) {
+                    val location = userAsked.getLastLocation() ?: return@get call.respond(
+                        HttpStatusCode.NotFound, "User's location in unknown")
+                    val locationString = Base64.getEncoder().encodeToString(location.toByteArray())
+                    return@get call.respond(HttpStatusCode.OK, locationString)
+                } else {
+                    return@get call.respond(
+                        HttpStatusCode.Forbidden, "You have no permission to read user's location")
                 }
             }
         }
