@@ -59,27 +59,46 @@ fun Application.configureRouting() {
             }
             post("/shareLocation/{action}") {
                 val usersList = ServerData.usersList
-                val userSharing = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                val userAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
                     ?.let { usersList.getUser(it) } ?: return@post call.respond(
                     HttpStatusCode.Unauthorized, "Error reading user")
-                val userLoginSharedTo = call.receiveText()
-                val userIdSharedTo = usersList.getUser(userLoginSharedTo)?.id ?: return@post call.respond(
-                    HttpStatusCode.BadRequest, "No user with login $userLoginSharedTo")
-                if (userIdSharedTo == userSharing.id) {
+                val userTargetLogin = call.receiveText()
+                val userTarget = usersList.getUser(userTargetLogin)?.id
+                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
+                    HttpStatusCode.BadRequest, "No user with login $userTargetLogin")
+                if (userTarget.id == userAsking.id) {
                     call.respond(HttpStatusCode.BadRequest, "You always share location to yourself")
                 } else {
                     when (val action = call.parameters["action"]) {
                         "share" -> {
-                            userSharing.shareLocation(userIdSharedTo)
-                            call.respond(HttpStatusCode.OK, Json.encodeToString(userSharing))
+                            userAsking.shareLocation(userTarget.id)
+                            return@post call.respond(HttpStatusCode.OK, "Successfully shared location")
                         }
                         "stop" -> {
-                            userSharing.stopSharingLocation(userIdSharedTo)
-                            call.respond(HttpStatusCode.OK, Json.encodeToString(userSharing))
+                            userAsking.stopSharingLocation(userTarget.id)
+                            return@post call.respond(HttpStatusCode.OK, "Successfully stopped sharing location")
+                        }
+                        "ask" -> {
+                            return@post if (userTarget.checkSharingLocation(userAsking.id))
+                                call.respond(HttpStatusCode.OK,
+                                    "You already have permission to read ${userTarget.login}'s location")
+                            else {
+                                userAsking.askForSharingLocation(userTarget.id)
+                                call.respond(
+                                    HttpStatusCode.OK, "Asked ${userTarget.login} for sharing location")
+                            }
                         }
                         else -> return@post call.respond(HttpStatusCode.BadRequest, "No action $action")
                     }
                 }
+            }
+            get("/shareLocation/getAsks") {
+                val usersList = ServerData.usersList
+                val userAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                    ?.let { usersList.getUser(it) } ?: return@get call.respond(
+                    HttpStatusCode.Unauthorized, "Error reading user")
+                val resultString = userAsking.getSharingLocationAsks().joinToString(" ")
+                return@get call.respond(HttpStatusCode.OK, resultString)
             }
             get("/location/{option}/{userLogin}") {
                 val userIdAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull() ?: return@get call.respond(

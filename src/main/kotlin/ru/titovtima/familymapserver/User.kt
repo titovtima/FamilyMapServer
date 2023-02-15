@@ -6,10 +6,11 @@ import java.sql.Connection
 @Serializable
 data class UserRegistrationData(val login: String, val password: String, val name: String) {
     fun writeToDatabase(connection: Connection = ServerData.databaseConnection): Int {
+        val encodedPassword = RSAEncoder.encode(password).toString()
         val writeQuery = connection.prepareStatement(
             "insert into \"User\" (login, password, name) values (?, ?, ?);")
         writeQuery.setString(1, login)
-        writeQuery.setString(2, password)
+        writeQuery.setString(2, encodedPassword)
         writeQuery.setString(3, name)
         writeQuery.execute()
 
@@ -70,12 +71,18 @@ class User (val id: Int, val login: String, private var password: String, privat
         if (shareLocationToUsers.contains(userId)) return
         if (writeToDb) {
             val connection = ServerData.databaseConnection
-            val query = connection.prepareStatement(
+            val queryShare = connection.prepareStatement(
                 "insert into UserShareLocation (userSharingId, userSharedToId) values (?, ?);"
             )
-            query.setInt(1, id)
-            query.setInt(2, userId)
-            query.execute()
+            queryShare.setInt(1, id)
+            queryShare.setInt(2, userId)
+            queryShare.execute()
+
+            val queryDeleteAsk = connection.prepareStatement(
+                "delete from UserAskForShareLocation where userAskedForId = ? and userAskingId = ?;")
+            queryDeleteAsk.setInt(1, id)
+            queryDeleteAsk.setInt(2, userId)
+            queryDeleteAsk.execute()
         }
         shareLocationToUsers.add(userId)
     }
@@ -92,6 +99,31 @@ class User (val id: Int, val login: String, private var password: String, privat
             query.execute()
         }
         shareLocationToUsers.remove(userId)
+    }
+
+    fun askForSharingLocation(userId: Int) {
+        try {
+            val connection = ServerData.databaseConnection
+            val query = connection.prepareStatement(
+                "insert into UserAskForShareLocation (useraskingid, useraskedforid) values (?, ?);"
+            )
+            query.setInt(1, id)
+            query.setInt(2, userId)
+            query.execute()
+        } catch (_: Exception) {}
+    }
+
+    fun getSharingLocationAsks(): List<Int> {
+        val resultList = mutableListOf<Int>()
+        val connection = ServerData.databaseConnection
+        val query = connection.prepareStatement(
+            "select userAskingId from UserAskForShareLocation where userAskedForId = ?;")
+        query.setInt(1, id)
+        val queryResult = query.executeQuery()
+        while (queryResult.next()) {
+            resultList.add(queryResult.getInt("userAskingId"))
+        }
+        return resultList.toList()
     }
 
     fun checkSharingLocation(userId: Int) = shareLocationToUsers.contains(userId)
