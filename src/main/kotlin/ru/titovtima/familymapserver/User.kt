@@ -45,17 +45,20 @@ class User (val id: Int, val login: String, private var password: String, privat
     }
 
     constructor(id: Int, userRegistrationData: UserRegistrationData):
-            this(id, userRegistrationData.login, userRegistrationData.password, userRegistrationData.name)
+            this(id, userRegistrationData.login,
+                RSAEncoder.encode(userRegistrationData.password).toString(),
+                userRegistrationData.name)
 
-    fun checkPassword(password: String) = password == this.password
+    fun checkPassword(password: String) = RSAEncoder.encode(password).toString() == this.password
 
     fun changePassword(newPassword: String) {
+        val encodedPassword = RSAEncoder.encode(newPassword).toString()
         val connection = ServerData.databaseConnection
         val query = connection.prepareStatement("update \"User\" set password = ? where id = ?;")
-        query.setString(1, newPassword)
+        query.setString(1, encodedPassword)
         query.setInt(2, id)
         query.execute()
-        password = newPassword
+        password = encodedPassword
     }
 
     fun getName() = name
