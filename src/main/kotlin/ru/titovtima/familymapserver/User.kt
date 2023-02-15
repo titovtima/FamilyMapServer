@@ -49,13 +49,14 @@ class User (val id: Int, val login: String, private var password: String, privat
 
     fun checkPassword(password: String) = password == this.password
 
-    fun changePassword(oldPassword: String, newPassword: String) =
-        if (checkPassword(oldPassword)) {
-            password = newPassword
-            true
-        } else {
-            false
-        }
+    fun changePassword(newPassword: String) {
+        val connection = ServerData.databaseConnection
+        val query = connection.prepareStatement("update \"User\" set password = ? where id = ?;")
+        query.setString(1, newPassword)
+        query.setInt(2, id)
+        query.execute()
+        password = newPassword
+    }
 
     fun getName() = name
     fun setName(name: String) {
@@ -103,7 +104,7 @@ class User (val id: Int, val login: String, private var password: String, privat
 
     fun getLocationHistory(): List<Location> {
         val resultList = mutableListOf<Location>()
-        val connection = ServerData.databaseConnection;
+        val connection = ServerData.databaseConnection
         val query = connection.prepareStatement(
             "select latitude, longitude, date from UserLocation where userId = ? order by date")
         query.setInt(1, id)

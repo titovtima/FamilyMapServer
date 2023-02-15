@@ -25,10 +25,28 @@ fun Application.configureRouting() {
         authenticate("auth-basic") {
             post("/auth/login") {
                 val usersList = ServerData.usersList
-                val user = call.principal<UserIdPrincipal>()?.name
+                val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
                     ?.let { usersList.getUser(it) } ?: return@post call.respond(
                     HttpStatusCode.Unauthorized, "Log in error")
                 call.respond(HttpStatusCode.OK, Json.encodeToString(user))
+            }
+            post("/auth/changePassword") {
+                val usersList = ServerData.usersList
+                val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
+                    HttpStatusCode.Unauthorized, "Log in error")
+                val newPassword = call.receiveText()
+                user.changePassword(newPassword)
+                call.respond("Password changed")
+            }
+            post("/auth/changeName") {
+                val usersList = ServerData.usersList
+                val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
+                    HttpStatusCode.Unauthorized, "Log in error")
+                val newName = call.receiveText()
+                user.setName(newName)
+                call.respond("Name changed")
             }
             post("/location") {
                 val usersList = ServerData.usersList
