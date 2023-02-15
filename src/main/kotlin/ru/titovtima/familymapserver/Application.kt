@@ -14,7 +14,7 @@ fun main() {
     thread {
         while (true) {
             while (!deleteOldLocationsFlag)
-                Thread.yield()
+                Thread.sleep(500)
             deleteOldLocationsFlag = false
             deleteOldLocations()
         }
@@ -23,7 +23,7 @@ fun main() {
     thread {
         while (true) {
             while (!writeUsersLocationsToDatabaseFlag)
-                Thread.yield()
+                Thread.sleep(500)
             writeUsersLocationsToDatabaseFlag = false
             for (user in ServerData.usersList.getList()) {
                 val userLocation = user.getLastLocation() ?: continue
