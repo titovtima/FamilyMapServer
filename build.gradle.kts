@@ -18,6 +18,12 @@ application {
     applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
 }
 
+ktor {
+    fatJar {
+        archiveFileName.set("FamilyMapServer.jar")
+    }
+}
+
 repositories {
     mavenCentral()
 }
