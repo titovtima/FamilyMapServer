@@ -134,6 +134,28 @@ fun Application.configureRouting() {
                         HttpStatusCode.Forbidden, "You have no permission to read user's location")
                 }
             }
+            post("/contacts/{action}") {
+                val usersList = ServerData.usersList
+                val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
+                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
+                    HttpStatusCode.Unauthorized, "Error reading user")
+                val contact = call.receive<User.Contact>()
+                when (val action = call.parameters["action"]) {
+                    "add" -> {
+                        return@post if (user.addContact(contact))
+                            call.respond(HttpStatusCode.OK, "Contact added")
+                        else
+                            call.respond(HttpStatusCode.BadRequest, "Contact already exists")
+                    }
+                    "update" -> {
+                        return@post if (user.updateContact(contact))
+                            call.respond(HttpStatusCode.OK, "Contact updated")
+                        else
+                            call.respond(HttpStatusCode.BadRequest, "Contact doesn't exist")
+                    }
+                    else -> return@post call.respond(HttpStatusCode.BadRequest, "No option $action")
+                }
+            }
         }
     }
 }

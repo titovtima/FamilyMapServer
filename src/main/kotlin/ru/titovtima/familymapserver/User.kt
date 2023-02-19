@@ -2,6 +2,7 @@ package ru.titovtima.familymapserver
 
 import kotlinx.serialization.Serializable
 import java.sql.Connection
+import java.sql.Types
 
 @Serializable
 data class UserRegistrationData(val login: String, val password: String, val name: String) {
@@ -26,6 +27,9 @@ data class UserRegistrationData(val login: String, val password: String, val nam
 class User (val id: Int, val login: String, private var password: String, private var name: String) {
     private val shareLocationToUsers = mutableSetOf<Int>()
     private var lastLocation: Location?
+    private val contactsMutable = mutableListOf<Contact>()
+    val contacts
+    get() = contactsMutable.toList()
 
     init {
         val connection = ServerData.databaseConnection
@@ -152,6 +156,45 @@ class User (val id: Int, val login: String, private var password: String, privat
         }
         return resultList.toList()
     }
+
+    fun addContact(contact: Contact, writeToDb: Boolean = true): Boolean {
+        if (contact.userId == null) return false
+        if (this.contacts.any { userContact -> userContact.userId == contact.userId })
+            return false
+        this.contactsMutable.add(contact)
+        if (writeToDb) {
+            val connection = ServerData.databaseConnection
+            val query = connection.prepareStatement(
+                "insert into UserSavedContacts (userId, contactUserId, name, showLocation)  values (?, ?, ?, ?);")
+            query.setInt(1, id)
+            query.setInt(2, contact.userId)
+            query.setString(3, contact.name)
+            query.setBoolean(4, contact.showLocation)
+            query.execute()
+        }
+        return true
+    }
+
+    fun updateContact(newContact: Contact, writeToDb: Boolean = true): Boolean {
+        if (newContact.userId == null) return false
+        val oldContact = contacts.find { contact -> contact.userId == newContact.userId } ?: return false
+        if (writeToDb) {
+            val connection = ServerData.databaseConnection
+            val query = connection.prepareStatement(
+                "update UserSavedContacts set name = ?, showLocation = ? where userId = ? and contactUserId = ?;")
+            query.setString(1, newContact.name)
+            query.setBoolean(2, newContact.showLocation)
+            query.setInt(3, id)
+            query.setInt(4, newContact.userId)
+            query.execute()
+        }
+        oldContact.name = newContact.name
+        oldContact.showLocation = newContact.showLocation
+        return true
+    }
+
+    @Serializable
+    data class Contact(val userId: Int?, var name: String, var showLocation: Boolean = true)
 }
 
 class UsersList {
@@ -216,6 +259,17 @@ class UsersList {
                 val userSharingId = resultReadLocationSharing.getInt("userSharingId")
                 val userSharedToId = resultReadLocationSharing.getInt("userSharedToId")
                 usersList.getUser(userSharingId)?.shareLocation(userSharedToId, false)
+            }
+
+            val queryReadContacts = connection.prepareStatement(
+                "select userId, contactUserId, name, showLocation from UserSavedContacts;")
+            val resultReadContacts = queryReadContacts.executeQuery()
+            while (resultReadContacts.next()) {
+                val userId = resultReadContacts.getInt("userId")
+                val contactUserId = resultReadContacts.getInt("contactUserId")
+                val name = resultReadContacts.getString("name")
+                val showLocation = resultReadContacts.getBoolean("showLocation")
+                usersList.getUser(userId)?.addContact(User.Contact(contactUserId, name, showLocation), false)
             }
 
             return usersList
