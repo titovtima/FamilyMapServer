@@ -2,7 +2,6 @@ package ru.titovtima.familymapserver
 
 import kotlinx.serialization.Serializable
 import java.sql.Connection
-import java.sql.Types
 
 @Serializable
 data class UserRegistrationData(val login: String, val password: String, val name: String) {
@@ -23,7 +22,6 @@ data class UserRegistrationData(val login: String, val password: String, val nam
     }
 }
 
-@Serializable
 class User (val id: Int, val login: String, private var password: String, private var name: String) {
     private val shareLocationToUsers = mutableSetOf<Int>()
     private var lastLocation: Location?
@@ -193,6 +191,21 @@ class User (val id: Int, val login: String, private var password: String, privat
         return true
     }
 
+    fun jsonStringToSend(): String {
+        var result = "{\"login\":\"$login\",\"name\":\"$name\",\"contacts\":["
+        contacts.forEach { contact ->
+            val user = contact.userId?.let { ServerData.usersList.getUser(it) }
+            result += if (user != null)
+                "{\"login\":\"${user.login}\""
+            else
+                "{\"login\":null"
+            result += ",\"name\":\"${contact.name}\",\"showLocation\":${contact.showLocation}},"
+        }
+        result = result.substring(0, result.length - 1)
+        result += "]}"
+        return result
+    }
+
     @Serializable
     data class Contact(val userId: Int?, var name: String, var showLocation: Boolean = true)
 }
@@ -220,8 +233,6 @@ class UsersList {
 
     fun checkUserPassword(login: String, password: String) =
         getUser(login)?.checkPassword(password) == true
-
-    fun hasLogin(login: String) = loginToIdMap.containsKey(login)
 
     fun deleteUser(id: Int): User? {
         val user = getUser(id)

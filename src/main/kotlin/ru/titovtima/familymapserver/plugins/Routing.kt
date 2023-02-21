@@ -6,8 +6,6 @@ import io.ktor.server.response.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.request.*
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import ru.titovtima.familymapserver.*
 import java.util.*
 
@@ -28,7 +26,7 @@ fun Application.configureRouting() {
                 val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
                     ?.let { usersList.getUser(it) } ?: return@post call.respond(
                     HttpStatusCode.Unauthorized, "Log in error")
-                call.respond(HttpStatusCode.OK, Json.encodeToString(user))
+                call.respond(HttpStatusCode.OK, user.jsonStringToSend())
             }
             post("/auth/changePassword") {
                 val usersList = ServerData.usersList
