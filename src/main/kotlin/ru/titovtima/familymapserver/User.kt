@@ -155,50 +155,59 @@ class User (val id: Int, val login: String, private var password: String, privat
         return resultList.toList()
     }
 
-    fun addContact(contact: Contact, writeToDb: Boolean = true): Boolean {
-        if (contact.userId == null) return false
-        if (this.contacts.any { userContact -> userContact.userId == contact.userId })
+    fun addContact(contactReceiveData: ContactReceiveData): Boolean {
+        val contactUser = contactReceiveData.login?.let { ServerData.usersList.getUser(it) } ?: return false
+        if (this.contacts.any { userContact -> userContact.userId == contactUser.id })
             return false
-        this.contactsMutable.add(contact)
-        if (writeToDb) {
-            val connection = ServerData.databaseConnection
-            val query = connection.prepareStatement(
-                "insert into UserSavedContacts (userId, contactUserId, name, showLocation)  values (?, ?, ?, ?);")
-            query.setInt(1, id)
-            query.setInt(2, contact.userId)
-            query.setString(3, contact.name)
-            query.setBoolean(4, contact.showLocation)
-            query.execute()
-        }
+        val contactName = contactReceiveData.name ?: contactUser.name
+        val contactShowLocation = contactReceiveData.showLocation ?: true
+        val connection = ServerData.databaseConnection
+        val query = connection.prepareStatement(
+            "insert into UserSavedContacts (userId, contactUserId, name, showLocation) values (?, ?, ?, ?) " +
+                    "returning contactId;")
+        query.setInt(1, id)
+        query.setInt(2, contactUser.id)
+        query.setString(3, contactName)
+        query.setBoolean(4, contactShowLocation)
+        val result = query.executeQuery()
+        result.next()
+        val contactId = result.getInt("contactId")
+        this.contactsMutable.add(Contact(contactId, contactUser.id, contactName, contactShowLocation))
         return true
     }
 
-    fun updateContact(newContact: Contact, writeToDb: Boolean = true): Boolean {
-        if (newContact.userId == null) return false
-        val oldContact = contacts.find { contact -> contact.userId == newContact.userId } ?: return false
-        if (writeToDb) {
-            val connection = ServerData.databaseConnection
-            val query = connection.prepareStatement(
-                "update UserSavedContacts set name = ?, showLocation = ? where userId = ? and contactUserId = ?;")
-            query.setString(1, newContact.name)
-            query.setBoolean(2, newContact.showLocation)
-            query.setInt(3, id)
-            query.setInt(4, newContact.userId)
-            query.execute()
-        }
-        oldContact.name = newContact.name
-        oldContact.showLocation = newContact.showLocation
+    fun addContactFromDb(contact: Contact) {
+        this.contactsMutable.add(contact)
+    }
+
+    fun updateContact(contactReceiveData: ContactReceiveData): Boolean {
+        if (contactReceiveData.contactId == null) return false
+        val contact = contacts.find { contact -> contact.contactId == contactReceiveData.contactId } ?: return false
+        val contactName = contactReceiveData.name ?: contact.name
+        val contactShowLocation = contactReceiveData.showLocation ?: contact.showLocation
+
+        val connection = ServerData.databaseConnection
+        val query = connection.prepareStatement(
+            "update UserSavedContacts set name = ?, showLocation = ? where contactId = ?;")
+        query.setString(1, contactName)
+        query.setBoolean(2, contactShowLocation)
+        query.setInt(3, contact.contactId)
+        query.execute()
+
+        contact.name = contactName
+        contact.showLocation = contactShowLocation
         return true
     }
 
     fun jsonStringToSend(): String {
         var result = "{\"login\":\"$login\",\"name\":\"$name\",\"contacts\":["
         contacts.forEach { contact ->
+            result += "{\"contactId\":${contact.contactId},"
             val user = contact.userId?.let { ServerData.usersList.getUser(it) }
             result += if (user != null)
-                "{\"login\":\"${user.login}\""
+                "\"login\":\"${user.login}\""
             else
-                "{\"login\":null"
+                "\"login\":null"
             result += ",\"name\":\"${contact.name}\",\"showLocation\":${contact.showLocation}},"
         }
         result = result.substring(0, result.length - 1)
@@ -206,8 +215,13 @@ class User (val id: Int, val login: String, private var password: String, privat
         return result
     }
 
+    data class Contact(val contactId: Int, val userId: Int?, var name: String, var showLocation: Boolean = true)
+
     @Serializable
-    data class Contact(val userId: Int?, var name: String, var showLocation: Boolean = true)
+    data class ContactReceiveData(val contactId: Int? = null,
+                                  val login: String? = null,
+                                  val name: String? = null,
+                                  val showLocation: Boolean? = null)
 }
 
 class UsersList {
@@ -273,14 +287,15 @@ class UsersList {
             }
 
             val queryReadContacts = connection.prepareStatement(
-                "select userId, contactUserId, name, showLocation from UserSavedContacts;")
+                "select contactId, userId, contactUserId, name, showLocation from UserSavedContacts;")
             val resultReadContacts = queryReadContacts.executeQuery()
             while (resultReadContacts.next()) {
+                val contactId = resultReadContacts.getInt("contactId")
                 val userId = resultReadContacts.getInt("userId")
                 val contactUserId = resultReadContacts.getInt("contactUserId")
                 val name = resultReadContacts.getString("name")
                 val showLocation = resultReadContacts.getBoolean("showLocation")
-                usersList.getUser(userId)?.addContact(User.Contact(contactUserId, name, showLocation), false)
+                usersList.getUser(userId)?.addContactFromDb(User.Contact(contactId, contactUserId, name, showLocation))
             }
 
             return usersList

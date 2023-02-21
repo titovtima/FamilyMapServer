@@ -137,16 +137,16 @@ fun Application.configureRouting() {
                 val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
                     ?.let { usersList.getUser(it) } ?: return@post call.respond(
                     HttpStatusCode.Unauthorized, "Error reading user")
-                val contact = call.receive<User.Contact>()
+                val contactReceiveData = call.receive<User.ContactReceiveData>()
                 when (val action = call.parameters["action"]) {
                     "add" -> {
-                        return@post if (user.addContact(contact))
+                        return@post if (user.addContact(contactReceiveData))
                             call.respond(HttpStatusCode.OK, "Contact added")
                         else
-                            call.respond(HttpStatusCode.BadRequest, "Contact already exists")
+                            call.respond(HttpStatusCode.BadRequest, "Error adding contact")
                     }
                     "update" -> {
-                        return@post if (user.updateContact(contact))
+                        return@post if (user.updateContact(contactReceiveData))
                             call.respond(HttpStatusCode.OK, "Contact updated")
                         else
                             call.respond(HttpStatusCode.BadRequest, "Contact doesn't exist")
