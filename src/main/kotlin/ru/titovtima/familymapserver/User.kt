@@ -221,7 +221,8 @@ class User (val id: Int, val login: String, private var password: String, privat
                 "\"login\":null"
             result += ",\"name\":\"${contact.name}\",\"showLocation\":${contact.showLocation}},"
         }
-        result = result.substring(0, result.length - 1)
+        if (contacts.isNotEmpty())
+            result = result.substring(0, result.length - 1)
         result += "]}"
         return result
     }
