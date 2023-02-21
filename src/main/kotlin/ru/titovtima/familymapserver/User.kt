@@ -199,6 +199,17 @@ class User (val id: Int, val login: String, private var password: String, privat
         return true
     }
 
+    fun deleteContact(contactId: Int) {
+        val contact = contacts.find { contact -> contact.contactId == contactId } ?: return
+
+        val connection = ServerData.databaseConnection
+        val query = connection.prepareStatement("delete from UserSavedContacts where contactId = ?;")
+        query.setInt(1, contactId)
+        query.execute()
+
+        contactsMutable.remove(contact)
+    }
+
     fun jsonStringToSend(): String {
         var result = "{\"login\":\"$login\",\"name\":\"$name\",\"contacts\":["
         contacts.forEach { contact ->

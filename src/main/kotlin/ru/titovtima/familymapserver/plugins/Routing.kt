@@ -151,6 +151,13 @@ fun Application.configureRouting() {
                         else
                             call.respond(HttpStatusCode.BadRequest, "Contact doesn't exist")
                     }
+                    "delete" -> {
+                        if (contactReceiveData.contactId == null)
+                            return@post call.respond(
+                                HttpStatusCode.BadRequest, "Cannot delete, no contact id provided")
+                        user.deleteContact(contactReceiveData.contactId)
+                        return@post call.respond(HttpStatusCode.OK, "Contact deleted")
+                    }
                     else -> return@post call.respond(HttpStatusCode.BadRequest, "No option $action")
                 }
             }
