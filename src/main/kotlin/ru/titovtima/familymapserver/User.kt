@@ -155,10 +155,10 @@ class User (val id: Int, val login: String, private var password: String, privat
         return resultList.toList()
     }
 
-    fun addContact(contactReceiveData: ContactReceiveData): Boolean {
-        val contactUser = contactReceiveData.login?.let { ServerData.usersList.getUser(it) } ?: return false
+    fun addContact(contactReceiveData: ContactReceiveData): Int? {
+        val contactUser = contactReceiveData.login?.let { ServerData.usersList.getUser(it) } ?: return null
         if (this.contacts.any { userContact -> userContact.userId == contactUser.id })
-            return false
+            return null
         val contactName = contactReceiveData.name ?: contactUser.name
         val contactShowLocation = contactReceiveData.showLocation ?: true
         val connection = ServerData.databaseConnection
@@ -173,7 +173,7 @@ class User (val id: Int, val login: String, private var password: String, privat
         result.next()
         val contactId = result.getInt("contactId")
         this.contactsMutable.add(Contact(contactId, contactUser.id, contactName, contactShowLocation))
-        return true
+        return contactId
     }
 
     fun addContactFromDb(contact: Contact) {
