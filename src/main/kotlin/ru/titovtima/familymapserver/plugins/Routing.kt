@@ -96,7 +96,7 @@ fun Application.configureRouting() {
                 val userAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
                     ?.let { usersList.getUser(it) } ?: return@get call.respond(
                     HttpStatusCode.Unauthorized, "Error reading user")
-                val resultString = userAsking.getSharingLocationAsks().joinToString(" ")
+                val resultString = userAsking.getSharingLocationAsks().joinToString("\n")
                 return@get call.respond(HttpStatusCode.OK, resultString)
             }
             get("/location/{option}/{userLogin}") {

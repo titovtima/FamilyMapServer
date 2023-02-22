@@ -115,15 +115,15 @@ class User (val id: Int, val login: String, private var password: String, privat
         } catch (_: Exception) {}
     }
 
-    fun getSharingLocationAsks(): List<Int> {
-        val resultList = mutableListOf<Int>()
+    fun getSharingLocationAsks(): List<String> {
+        val resultList = mutableListOf<String>()
         val connection = ServerData.databaseConnection
         val query = connection.prepareStatement(
             "select userAskingId from UserAskForShareLocation where userAskedForId = ?;")
         query.setInt(1, id)
         val queryResult = query.executeQuery()
         while (queryResult.next()) {
-            resultList.add(queryResult.getInt("userAskingId"))
+            ServerData.usersList.getUser(queryResult.getInt("userAskingId"))?.login?.let { resultList.add(it) }
         }
         return resultList.toList()
     }
