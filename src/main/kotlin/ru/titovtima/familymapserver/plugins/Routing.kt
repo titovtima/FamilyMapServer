@@ -21,10 +21,10 @@ fun Application.configureRouting() {
                 call.respond(HttpStatusCode.BadRequest, "Registration error")
         }
         authenticate("auth-basic") {
-            post("/auth/login") {
+            get("/auth/login") {
                 val usersList = ServerData.usersList
                 val user = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
-                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
+                    ?.let { usersList.getUser(it) } ?: return@get call.respond(
                     HttpStatusCode.Unauthorized, "Log in error")
                 call.respond(HttpStatusCode.OK, user.jsonStringToSend())
             }
