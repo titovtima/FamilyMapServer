@@ -55,12 +55,13 @@ fun Application.configureRouting() {
                 user.updateLastLocation(location)
                 call.respond(HttpStatusCode.OK, "Successfully wrote location")
             }
-            post("/shareLocation/{action}") {
+            post("/shareLocation/{action}/{userLogin}") {
                 val usersList = ServerData.usersList
                 val userAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
                     ?.let { usersList.getUser(it) } ?: return@post call.respond(
                     HttpStatusCode.Unauthorized, "Error reading user")
-                val userTargetLogin = call.receiveText()
+                val userTargetLogin = call.parameters["userLogin"] ?: return@post call.respond(
+                    HttpStatusCode.BadRequest, "No user login provided")
                 val userTarget = usersList.getUser(userTargetLogin)?.id
                     ?.let { usersList.getUser(it) } ?: return@post call.respond(
                     HttpStatusCode.BadRequest, "No user with login $userTargetLogin")
@@ -78,7 +79,7 @@ fun Application.configureRouting() {
                         }
                         "ask" -> {
                             return@post if (userTarget.checkSharingLocation(userAsking.id))
-                                call.respond(HttpStatusCode.OK,
+                                call.respond(HttpStatusCode(239, "Already"),
                                     "You already have permission to read ${userTarget.login}'s location")
                             else {
                                 userAsking.askForSharingLocation(userTarget.id)
