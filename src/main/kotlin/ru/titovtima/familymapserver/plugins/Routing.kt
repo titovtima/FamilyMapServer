@@ -55,51 +55,6 @@ fun Application.configureRouting() {
                 user.updateLastLocation(location)
                 call.respond(HttpStatusCode.OK, "Successfully wrote location")
             }
-            post("/shareLocation/{action}/{userLogin}") {
-                val usersList = ServerData.usersList
-                val userAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
-                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
-                    HttpStatusCode.Unauthorized, "Error reading user")
-                val userTargetLogin = call.parameters["userLogin"] ?: return@post call.respond(
-                    HttpStatusCode.BadRequest, "No user login provided")
-                val userTarget = usersList.getUser(userTargetLogin)?.id
-                    ?.let { usersList.getUser(it) } ?: return@post call.respond(
-                    HttpStatusCode.BadRequest, "No user with login $userTargetLogin")
-                if (userTarget.id == userAsking.id) {
-                    call.respond(HttpStatusCode.BadRequest, "You always share location to yourself")
-                } else {
-                    when (val action = call.parameters["action"]) {
-                        "share" -> {
-                            userAsking.shareLocation(userTarget.id)
-                            userAsking.updateContact(
-                                User.ContactReceiveData(
-                                login = userTarget.login,
-                                shareLocation = true
-                            ), false)
-                            return@post call.respond(HttpStatusCode.OK, "Successfully shared location")
-                        }
-                        "stop" -> {
-                            userAsking.stopSharingLocation(userTarget.id)
-                            userAsking.updateContact(User.ContactReceiveData(
-                                login = userTarget.login,
-                                shareLocation = false
-                            ), false)
-                            return@post call.respond(HttpStatusCode.OK, "Successfully stopped sharing location")
-                        }
-                        "ask" -> {
-                            return@post if (userTarget.checkSharingLocation(userAsking.id))
-                                call.respond(HttpStatusCode(239, "Already"),
-                                    "You already have permission to read ${userTarget.login}'s location")
-                            else {
-                                userAsking.askForSharingLocation(userTarget.id)
-                                call.respond(
-                                    HttpStatusCode.OK, "Asked ${userTarget.login} for sharing location")
-                            }
-                        }
-                        else -> return@post call.respond(HttpStatusCode.BadRequest, "No action $action")
-                    }
-                }
-            }
             get("/shareLocation/getAsks") {
                 val usersList = ServerData.usersList
                 val userAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
@@ -163,11 +118,10 @@ fun Application.configureRouting() {
                             call.respond(HttpStatusCode.BadRequest, "Contact doesn't exist")
                     }
                     "delete" -> {
-                        if (contactReceiveData.contactId == null)
-                            return@post call.respond(
-                                HttpStatusCode.BadRequest, "Cannot delete, no contact id provided")
-                        user.deleteContact(contactReceiveData.contactId)
-                        return@post call.respond(HttpStatusCode.OK, "Contact deleted")
+                        if (user.deleteContact(contactReceiveData))
+                            return@post call.respond(HttpStatusCode.OK, "Contact deleted")
+                        else
+                            return@post call.respond(HttpStatusCode.BadRequest, "Error deleting contact")
                     }
                     else -> return@post call.respond(HttpStatusCode.BadRequest, "No option $action")
                 }

@@ -23,7 +23,6 @@ data class UserRegistrationData(val login: String, val password: String, val nam
 }
 
 class User (val id: Int, val login: String, private var password: String, private var name: String) {
-    private val shareLocationToUsers = mutableSetOf<Int>()
     private var lastLocation: Location?
     private val contactsMutable = mutableListOf<Contact>()
     val contacts
@@ -69,41 +68,36 @@ class User (val id: Int, val login: String, private var password: String, privat
         this.name = name
     }
 
-    fun shareLocation(userId: Int, writeToDb: Boolean = true) {
-        if (shareLocationToUsers.contains(userId)) return
-        if (writeToDb) {
-            val connection = ServerData.databaseConnection
-            val queryShare = connection.prepareStatement(
-                "insert into UserShareLocation (userSharingId, userSharedToId) values (?, ?);"
-            )
-            queryShare.setInt(1, id)
-            queryShare.setInt(2, userId)
+    private fun writeShareLocationToDb(userId: Int) {
+        val connection = ServerData.databaseConnection
+        val queryShare = connection.prepareStatement(
+            "insert into UserShareLocation (userSharingId, userSharedToId) values (?, ?);"
+        )
+        queryShare.setInt(1, id)
+        queryShare.setInt(2, userId)
+        try {
             queryShare.execute()
+        } catch (_: Error) {}
 
-            val queryDeleteAsk = connection.prepareStatement(
-                "delete from UserAskForShareLocation where userAskedForId = ? and userAskingId = ?;")
-            queryDeleteAsk.setInt(1, id)
-            queryDeleteAsk.setInt(2, userId)
-            queryDeleteAsk.execute()
-        }
-        shareLocationToUsers.add(userId)
+        val queryDeleteAsk = connection.prepareStatement(
+            "delete from UserAskForShareLocation where userAskedForId = ? and userAskingId = ?;"
+        )
+        queryDeleteAsk.setInt(1, id)
+        queryDeleteAsk.setInt(2, userId)
+        queryDeleteAsk.execute()
     }
 
-    fun stopSharingLocation(userId: Int, writeToDb: Boolean = true) {
-        if (!shareLocationToUsers.contains(userId)) return
-        if (writeToDb) {
-            val connection = ServerData.databaseConnection
-            val query = connection.prepareStatement(
-                "delete from UserShareLocation where userSharingId = ? and userSharedToId = ?;"
-            )
-            query.setInt(1, id)
-            query.setInt(2, userId)
-            query.execute()
-        }
-        shareLocationToUsers.remove(userId)
+    private fun writeStopSharingLocationToDb(userId: Int) {
+        val connection = ServerData.databaseConnection
+        val query = connection.prepareStatement(
+            "delete from UserShareLocation where userSharingId = ? and userSharedToId = ?;"
+        )
+        query.setInt(1, id)
+        query.setInt(2, userId)
+        query.execute()
     }
 
-    fun askForSharingLocation(userId: Int) {
+    private fun askForSharingLocation(userId: Int) {
         try {
             val connection = ServerData.databaseConnection
             val query = connection.prepareStatement(
@@ -128,14 +122,14 @@ class User (val id: Int, val login: String, private var password: String, privat
         return resultList.toList()
     }
 
-    fun checkSharingLocation(userId: Int) = shareLocationToUsers.contains(userId)
+    fun checkSharingLocation(userId: Int) = contacts.find { it.userId == userId }?.shareLocation == true
 
     fun getLastLocation() = lastLocation
 
     fun updateLastLocation(location: Location) {
-        val _lastLocation = lastLocation
-        if (_lastLocation == null || _lastLocation.date < location.date) {
-            lastLocation = location
+        val lastLocation = this.lastLocation
+        if (lastLocation == null || lastLocation.date < location.date) {
+            this.lastLocation = location
         }
     }
 
@@ -161,6 +155,7 @@ class User (val id: Int, val login: String, private var password: String, privat
             return null
         val contactName = contactReceiveData.name ?: contactUser.name
         val contactShowLocation = contactReceiveData.showLocation ?: true
+
         val connection = ServerData.databaseConnection
         val query = connection.prepareStatement(
             "insert into UserSavedContacts (userId, contactUserId, name, showLocation) values (?, ?, ?, ?) " +
@@ -171,9 +166,14 @@ class User (val id: Int, val login: String, private var password: String, privat
         query.setBoolean(4, contactShowLocation)
         val result = query.executeQuery()
         result.next()
-        if (contactReceiveData.shareLocation == true)
-            shareLocation(contactUser.id)
         val contactId = result.getInt("contactId")
+
+        val contactShareLocation = contactReceiveData.shareLocation ?: true
+        if (contactShareLocation)
+            writeShareLocationToDb(contactUser.id)
+        if (contactShowLocation && !contactUser.checkSharingLocation(this.id))
+            askForSharingLocation(contactUser.id)
+
         this.contactsMutable.add(Contact(contactId, contactUser.id, contactName, contactShowLocation))
         return contactId
     }
@@ -186,9 +186,11 @@ class User (val id: Int, val login: String, private var password: String, privat
                       writeToDb: Boolean = true,
                       usersList: UsersList = ServerData.usersList): Boolean {
         val contact = contacts.find { contact -> contact.contactId == contactReceiveData.contactId }
-            ?: contacts.firstOrNull { contact ->
-                contact.userId != null && contact.userId == contactReceiveData.login?.let { usersList.getUser(it)?.id }
-            } ?: return false
+            ?: contacts.firstOrNull { contact -> contact.userId != null &&
+                    contact.userId == contactReceiveData.login?.let { usersList.getUser(it)?.id }
+            }
+            ?: return false
+
         if (contactReceiveData.contactId != null && contactReceiveData.contactId != contact.contactId) return false
         if (contactReceiveData.login != null &&
             usersList.getUser(contactReceiveData.login)?.id != contact.userId) return false
@@ -205,30 +207,58 @@ class User (val id: Int, val login: String, private var password: String, privat
             query.setBoolean(2, contactShowLocation)
             query.setInt(3, contact.contactId)
             query.execute()
+
+            if (contactReceiveData.shareLocation != null && contactReceiveData.shareLocation != contact.shareLocation) {
+                if (contactReceiveData.shareLocation)
+                    contact.userId?.let { writeShareLocationToDb(it) }
+                else
+                    contact.userId?.let { writeStopSharingLocationToDb(it) }
+            }
         }
 
         if (contactReceiveData.shareLocation != null) {
-            if (contactReceiveData.shareLocation)
-                contact.userId?.let { shareLocation(it) }
-            else
-                contact.userId?.let { stopSharingLocation(it) }
             contact.shareLocation = contactReceiveData.shareLocation
         }
+        val contactUser = contact.userId?.let { usersList.getUser(it) }
+        if (contactUser != null && contactShowLocation && !contactUser.checkSharingLocation(this.id))
+            askForSharingLocation(contactUser.id)
 
         contact.name = contactName
         contact.showLocation = contactShowLocation
         return true
     }
 
-    fun deleteContact(contactId: Int) {
+    private fun deleteContact(contactId: Int) {
         val contact = contacts.find { contact -> contact.contactId == contactId } ?: return
 
         val connection = ServerData.databaseConnection
-        val query = connection.prepareStatement("delete from UserSavedContacts where contactId = ?;")
+        val query = connection.prepareStatement("delete from UserSavedContacts where contactId = ? and userId = ?;")
         query.setInt(1, contactId)
+        query.setInt(2, this.id)
         query.execute()
 
+        if (contact.shareLocation && contact.userId != null) {
+            val queryDeleteSharing = connection.prepareStatement(
+                "delete from UserShareLocation where userSharingId = ? and userSharedToId = ?;")
+            queryDeleteSharing.setInt(1, this.id)
+            queryDeleteSharing.setInt(2, contact.userId)
+            queryDeleteSharing.execute()
+        }
+
         contactsMutable.remove(contact)
+    }
+
+    fun deleteContact(contactReceiveData: ContactReceiveData): Boolean {
+        val contact = contacts.find { contact -> contact.contactId == contactReceiveData.contactId }
+            ?: contacts.find { contact -> contact.userId != null &&
+                    contact.userId == contactReceiveData.login?.let { ServerData.usersList.getUser(it)?.id }
+            }
+            ?: return false
+        if (contactReceiveData.contactId != null && contact.contactId != contactReceiveData.contactId) return false
+        if (contactReceiveData.login != null &&
+            ServerData.usersList.getUser(contactReceiveData.login)?.id != contact.userId) return false
+        deleteContact(contact.contactId)
+        return true
     }
 
     fun jsonStringToSend(): String {
@@ -337,12 +367,10 @@ class UsersList {
                 val userSharingId = resultReadLocationSharing.getInt("userSharingId")
                 val userSharedToId = resultReadLocationSharing.getInt("userSharedToId")
                 val userSharing = usersList.getUser(userSharingId) ?: continue
-                userSharing.shareLocation(userSharedToId, false)
-                println("User sharing id = ${userSharing.id}\nUser shared to id = $userSharedToId")
-                println(userSharing.updateContact(User.ContactReceiveData(
+                userSharing.updateContact(User.ContactReceiveData(
                     login = usersList.getUser(userSharedToId)?.login,
                     shareLocation = true
-                ), false, usersList))
+                ), false, usersList)
             }
 
             return usersList
