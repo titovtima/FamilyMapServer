@@ -171,6 +171,8 @@ class User (val id: Int, val login: String, private var password: String, privat
         query.setBoolean(4, contactShowLocation)
         val result = query.executeQuery()
         result.next()
+        if (contactReceiveData.shareLocation == true)
+            shareLocation(contactUser.id)
         val contactId = result.getInt("contactId")
         this.contactsMutable.add(Contact(contactId, contactUser.id, contactName, contactShowLocation))
         return contactId
@@ -180,19 +182,38 @@ class User (val id: Int, val login: String, private var password: String, privat
         this.contactsMutable.add(contact)
     }
 
-    fun updateContact(contactReceiveData: ContactReceiveData): Boolean {
-        if (contactReceiveData.contactId == null) return false
-        val contact = contacts.find { contact -> contact.contactId == contactReceiveData.contactId } ?: return false
+    fun updateContact(contactReceiveData: ContactReceiveData,
+                      writeToDb: Boolean = true,
+                      usersList: UsersList = ServerData.usersList): Boolean {
+        val contact = contacts.find { contact -> contact.contactId == contactReceiveData.contactId }
+            ?: contacts.firstOrNull { contact ->
+                contact.userId != null && contact.userId == contactReceiveData.login?.let { usersList.getUser(it)?.id }
+            } ?: return false
+        if (contactReceiveData.contactId != null && contactReceiveData.contactId != contact.contactId) return false
+        if (contactReceiveData.login != null &&
+            usersList.getUser(contactReceiveData.login)?.id != contact.userId) return false
+
         val contactName = contactReceiveData.name ?: contact.name
         val contactShowLocation = contactReceiveData.showLocation ?: contact.showLocation
 
-        val connection = ServerData.databaseConnection
-        val query = connection.prepareStatement(
-            "update UserSavedContacts set name = ?, showLocation = ? where contactId = ?;")
-        query.setString(1, contactName)
-        query.setBoolean(2, contactShowLocation)
-        query.setInt(3, contact.contactId)
-        query.execute()
+        if (writeToDb) {
+            val connection = ServerData.databaseConnection
+            val query = connection.prepareStatement(
+                "update UserSavedContacts set name = ?, showLocation = ? where contactId = ?;"
+            )
+            query.setString(1, contactName)
+            query.setBoolean(2, contactShowLocation)
+            query.setInt(3, contact.contactId)
+            query.execute()
+        }
+
+        if (contactReceiveData.shareLocation != null) {
+            if (contactReceiveData.shareLocation)
+                contact.userId?.let { shareLocation(it) }
+            else
+                contact.userId?.let { stopSharingLocation(it) }
+            contact.shareLocation = contactReceiveData.shareLocation
+        }
 
         contact.name = contactName
         contact.showLocation = contactShowLocation
@@ -219,7 +240,9 @@ class User (val id: Int, val login: String, private var password: String, privat
                 "\"login\":\"${user.login}\""
             else
                 "\"login\":null"
-            result += ",\"name\":\"${contact.name}\",\"showLocation\":${contact.showLocation}},"
+            result += ",\"name\":\"${contact.name}\","
+            result += "\"showLocation\":${contact.showLocation},"
+            result += "\"shareLocation\":${contact.shareLocation}},"
         }
         if (contacts.isNotEmpty())
             result = result.substring(0, result.length - 1)
@@ -227,13 +250,18 @@ class User (val id: Int, val login: String, private var password: String, privat
         return result
     }
 
-    data class Contact(val contactId: Int, val userId: Int?, var name: String, var showLocation: Boolean = true)
+    data class Contact(val contactId: Int,
+                       val userId: Int?,
+                       var name: String,
+                       var showLocation: Boolean = true,
+                       var shareLocation: Boolean = true)
 
     @Serializable
     data class ContactReceiveData(val contactId: Int? = null,
                                   val login: String? = null,
                                   val name: String? = null,
-                                  val showLocation: Boolean? = null)
+                                  val showLocation: Boolean? = null,
+                                  val shareLocation: Boolean? = null)
 }
 
 class UsersList {
@@ -290,14 +318,6 @@ class UsersList {
                 usersList.loginToIdMap[login] = id
             }
 
-            val queryReadLocationSharing = connection.prepareStatement("select * from UserShareLocation;")
-            val resultReadLocationSharing = queryReadLocationSharing.executeQuery()
-            while (resultReadLocationSharing.next()) {
-                val userSharingId = resultReadLocationSharing.getInt("userSharingId")
-                val userSharedToId = resultReadLocationSharing.getInt("userSharedToId")
-                usersList.getUser(userSharingId)?.shareLocation(userSharedToId, false)
-            }
-
             val queryReadContacts = connection.prepareStatement(
                 "select contactId, userId, contactUserId, name, showLocation from UserSavedContacts;")
             val resultReadContacts = queryReadContacts.executeQuery()
@@ -307,7 +327,22 @@ class UsersList {
                 val contactUserId = resultReadContacts.getInt("contactUserId")
                 val name = resultReadContacts.getString("name")
                 val showLocation = resultReadContacts.getBoolean("showLocation")
-                usersList.getUser(userId)?.addContactFromDb(User.Contact(contactId, contactUserId, name, showLocation))
+                usersList.getUser(userId)?.addContactFromDb(
+                    User.Contact(contactId, contactUserId, name, showLocation, false))
+            }
+
+            val queryReadLocationSharing = connection.prepareStatement("select * from UserShareLocation;")
+            val resultReadLocationSharing = queryReadLocationSharing.executeQuery()
+            while (resultReadLocationSharing.next()) {
+                val userSharingId = resultReadLocationSharing.getInt("userSharingId")
+                val userSharedToId = resultReadLocationSharing.getInt("userSharedToId")
+                val userSharing = usersList.getUser(userSharingId) ?: continue
+                userSharing.shareLocation(userSharedToId, false)
+                println("User sharing id = ${userSharing.id}\nUser shared to id = $userSharedToId")
+                println(userSharing.updateContact(User.ContactReceiveData(
+                    login = usersList.getUser(userSharedToId)?.login,
+                    shareLocation = true
+                ), false, usersList))
             }
 
             return usersList

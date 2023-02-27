@@ -71,10 +71,19 @@ fun Application.configureRouting() {
                     when (val action = call.parameters["action"]) {
                         "share" -> {
                             userAsking.shareLocation(userTarget.id)
+                            userAsking.updateContact(
+                                User.ContactReceiveData(
+                                login = userTarget.login,
+                                shareLocation = true
+                            ), false)
                             return@post call.respond(HttpStatusCode.OK, "Successfully shared location")
                         }
                         "stop" -> {
                             userAsking.stopSharingLocation(userTarget.id)
+                            userAsking.updateContact(User.ContactReceiveData(
+                                login = userTarget.login,
+                                shareLocation = false
+                            ), false)
                             return@post call.respond(HttpStatusCode.OK, "Successfully stopped sharing location")
                         }
                         "ask" -> {
