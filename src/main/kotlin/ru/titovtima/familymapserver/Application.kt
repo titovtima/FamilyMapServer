@@ -59,7 +59,7 @@ fun Application.module() {
 class ServerData {
     companion object {
         val databaseConnection = DriverManager.getConnection(
-            "jdbc:postgresql://localhost:5432/postgres", "postgres", "postgres")
+            "jdbc:postgresql://localhost:5432/familymapserver", "postgres", "postgres")
         val usersList = UsersList.readFromDatabase()
     }
 }
