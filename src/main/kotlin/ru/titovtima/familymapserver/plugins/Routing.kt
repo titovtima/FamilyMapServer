@@ -105,9 +105,9 @@ fun Application.configureRouting() {
                 val contactReceiveData = call.receive<User.ContactReceiveData>()
                 when (val action = call.parameters["action"]) {
                     "add" -> {
-                        val contactId = user.addContact(contactReceiveData)
-                        return@post if (contactId != null)
-                            call.respond(HttpStatusCode.OK, contactId)
+                        val contact = user.addContact(contactReceiveData)
+                        return@post if (contact != null)
+                            call.respond(HttpStatusCode.Created, contact.toJsonString())
                         else
                             call.respond(HttpStatusCode.BadRequest, "Error adding contact")
                     }

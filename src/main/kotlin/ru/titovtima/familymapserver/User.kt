@@ -1,6 +1,7 @@
 package ru.titovtima.familymapserver
 
 import kotlinx.serialization.Serializable
+import org.postgresql.util.PSQLException
 import java.sql.Connection
 
 @Serializable
@@ -149,7 +150,7 @@ class User (val id: Int, val login: String, private var password: String, privat
         return resultList.toList()
     }
 
-    fun addContact(contactReceiveData: ContactReceiveData): Int? {
+    fun addContact(contactReceiveData: ContactReceiveData): Contact? {
         val contactUser = contactReceiveData.login?.let { ServerData.usersList.getUser(it) } ?: return null
         if (this.contacts.any { userContact -> userContact.userId == contactUser.id })
             return null
@@ -169,13 +170,16 @@ class User (val id: Int, val login: String, private var password: String, privat
         val contactId = result.getInt("contactId")
 
         val contactShareLocation = contactReceiveData.shareLocation ?: true
-        if (contactShareLocation)
-            writeShareLocationToDb(contactUser.id)
-        if (contactShowLocation && !contactUser.checkSharingLocation(this.id))
-            askForSharingLocation(contactUser.id)
+        try {
+            if (contactShareLocation)
+                writeShareLocationToDb(contactUser.id)
+            if (contactShowLocation && !contactUser.checkSharingLocation(this.id))
+                askForSharingLocation(contactUser.id)
+        } catch (_: PSQLException) {}
 
-        this.contactsMutable.add(Contact(contactId, contactUser.id, contactName, contactShowLocation))
-        return contactId
+        val contact = Contact(contactId, contactUser.id, contactName, contactShowLocation, contactShareLocation)
+        this.contactsMutable.add(contact)
+        return contact
     }
 
     fun addContactFromDb(contact: Contact) {
@@ -264,15 +268,7 @@ class User (val id: Int, val login: String, private var password: String, privat
     fun jsonStringToSend(): String {
         var result = "{\"login\":\"$login\",\"name\":\"$name\",\"contacts\":["
         contacts.forEach { contact ->
-            result += "{\"contactId\":${contact.contactId},"
-            val user = contact.userId?.let { ServerData.usersList.getUser(it) }
-            result += if (user != null)
-                "\"login\":\"${user.login}\""
-            else
-                "\"login\":null"
-            result += ",\"name\":\"${contact.name}\","
-            result += "\"showLocation\":${contact.showLocation},"
-            result += "\"shareLocation\":${contact.shareLocation}},"
+            result += contact.toJsonString() + ","
         }
         if (contacts.isNotEmpty())
             result = result.substring(0, result.length - 1)
@@ -284,7 +280,18 @@ class User (val id: Int, val login: String, private var password: String, privat
                        val userId: Int?,
                        var name: String,
                        var showLocation: Boolean = true,
-                       var shareLocation: Boolean = true)
+                       var shareLocation: Boolean = true) {
+        fun toJsonString(): String {
+            var string = "{\"contactId\":$contactId,"
+            val user = userId?.let { ServerData.usersList.getUser(it) }
+            string += if (user != null)
+                "\"login\":\"${user.login}\","
+            else
+                "\"login\":null,"
+            string += "\"name\":\"$name\",\"showLocation\":$showLocation,\"shareLocation\":$shareLocation}"
+            return string
+        }
+    }
 
     @Serializable
     data class ContactReceiveData(val contactId: Int? = null,
