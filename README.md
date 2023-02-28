@@ -52,7 +52,8 @@
       "contactId": 1,
       "login": "test_user_2",
       "name": "Ещё один пользователь",
-      "showLocation": true
+      "showLocation": true,
+      "shareLocation": true
     }
   ]
 }
