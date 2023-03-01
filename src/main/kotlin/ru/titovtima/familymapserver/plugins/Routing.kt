@@ -55,7 +55,7 @@ fun Application.configureRouting() {
                 user.updateLastLocation(location)
                 call.respond(HttpStatusCode.OK, "Successfully wrote location")
             }
-            get("/shareLocation/getAsks") {
+            get("/shareLocationAsks") {
                 val usersList = ServerData.usersList
                 val userAsking = call.principal<UserIdPrincipal>()?.name?.toIntOrNull()
                     ?.let { usersList.getUser(it) } ?: return@get call.respond(
