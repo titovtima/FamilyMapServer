@@ -20,6 +20,14 @@ fun Application.configureRouting() {
             } else
                 call.respond(HttpStatusCode.BadRequest, "Registration error")
         }
+        get("/username/{login}") {
+            val login = call.parameters["login"] ?: return@get call.respond(HttpStatusCode.BadRequest,
+                "Cannot get username: login is not provided")
+            val usersList = ServerData.usersList
+            val user = usersList.getUser(login) ?: return@get call.respond(HttpStatusCode.BadRequest,
+                "User with login $login is not found")
+            return@get call.respond(user.getName())
+        }
         authenticate("auth-basic") {
             get("/auth/login") {
                 val usersList = ServerData.usersList
