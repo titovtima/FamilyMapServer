@@ -22,7 +22,7 @@ fun writeLocationToDatabase(userId: Int,
                             location: Location,
                             connection: Connection = ServerData.databaseConnection): Boolean {
     val writeQuery = connection.prepareStatement(
-        "insert into UserLocation (userid, latitude, longitude, date) values (?, ?, ?, ?)")
+        "insert into user_location (user_id, latitude, longitude, date) values (?, ?, ?, ?)")
     writeQuery.setInt(1, userId)
     writeQuery.setInt(2, location.latitude)
     writeQuery.setInt(3, location.longitude)
@@ -37,14 +37,14 @@ fun writeLocationToDatabase(userId: Int,
 
 fun deleteOldLocations(maxAge: Long = 1000*60*60*24*7, connection: Connection = ServerData.databaseConnection) {
     val now = Date().time
-    val readQuery = connection.prepareStatement("select userId, date from UserLocation")
+    val readQuery = connection.prepareStatement("select user_id, date from user_location")
     val readResult = readQuery.executeQuery()
 
     while (readResult.next()) {
-        val userId = readResult.getInt("userId")
+        val userId = readResult.getInt("user_id")
         val date = readResult.getLong("date")
         if (date + maxAge < now) {
-            val deleteQuery = connection.prepareStatement("delete from UserLocation where userid = ? and date = ?")
+            val deleteQuery = connection.prepareStatement("delete from user_location where user_id = ? and date = ?")
             deleteQuery.setInt(1, userId)
             deleteQuery.setLong(2, date)
             deleteQuery.execute()
